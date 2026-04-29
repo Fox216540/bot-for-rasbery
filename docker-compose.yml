@@ -1,0 +1,43 @@
+services:
+  ai:
+    build:
+      context: ./ai
+      dockerfile: Dockerfile
+    container_name: semantic-ai
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=2)"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 20s
+    networks:
+      - internal
+
+  bot:
+    build:
+      context: ./bot
+      dockerfile: Dockerfile
+    container_name: semantic-bot
+    env_file:
+      - .env
+    environment:
+      HOST_PROC: /host_proc
+      HOST_SYS: /host_sys
+    volumes:
+      - notes_data:/data
+      - /proc:/host_proc:ro
+      - /sys:/host_sys:ro
+    depends_on:
+      ai:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - internal
+
+volumes:
+  notes_data:
+
+networks:
+  internal:
+    driver: bridge
