@@ -11,6 +11,8 @@ services:
       timeout: 3s
       retries: 30
       start_period: 20s
+    ports:
+      - "8000:8000"
     networks:
       - internal
 
@@ -24,6 +26,7 @@ services:
     environment:
       HOST_PROC: /host_proc
       HOST_SYS: /host_sys
+      AI_URL: http://127.0.0.1:8000
     volumes:
       - notes_data:/data
       - /proc:/host_proc:ro
@@ -32,8 +35,7 @@ services:
       ai:
         condition: service_healthy
     restart: unless-stopped
-    networks:
-      - internal
+    network_mode: host
 
 volumes:
   notes_data:
