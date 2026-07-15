@@ -27,10 +27,14 @@ services:
       HOST_PROC: /host_proc
       HOST_SYS: /host_sys
       AI_URL: http://127.0.0.1:8000
+      LAMP_STATE_FILE: /data/lamp_state.json
     volumes:
       - notes_data:/data
       - /proc:/host_proc:ro
       - /sys:/host_sys:ro
+      - /dev/bus/usb:/dev/bus/usb
+    device_cgroup_rules:
+      - "c 189:* rmw"
     depends_on:
       ai:
         condition: service_healthy
