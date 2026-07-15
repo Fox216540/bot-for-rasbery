@@ -17,6 +17,9 @@ type Config struct {
 	RebootCommand string
 	HostProc      string
 	HostSys       string
+	LampPort      string
+	LampLocation  string
+	LampStateFile string
 }
 
 func loadConfig() (Config, error) {
@@ -28,6 +31,9 @@ func loadConfig() (Config, error) {
 		RebootCommand: strings.TrimSpace(os.Getenv("REBOOT_COMMAND")),
 		HostProc:      strings.TrimSpace(os.Getenv("HOST_PROC")),
 		HostSys:       strings.TrimSpace(os.Getenv("HOST_SYS")),
+		LampPort:      strings.TrimSpace(os.Getenv("LAMP_PORT")),
+		LampLocation:  strings.TrimSpace(os.Getenv("LAMP_HUB_LOCATION")),
+		LampStateFile: strings.TrimSpace(os.Getenv("LAMP_STATE_FILE")),
 	}
 	if cfg.BotToken == "" {
 		return Config{}, fmt.Errorf("BOT_TOKEN is required")
@@ -51,6 +57,15 @@ func loadConfig() (Config, error) {
 	}
 	if cfg.HostSys == "" {
 		cfg.HostSys = "/sys"
+	}
+	if cfg.LampPort == "" {
+		cfg.LampPort = "4"
+	}
+	if cfg.LampLocation == "" {
+		cfg.LampLocation = "1-1"
+	}
+	if cfg.LampStateFile == "" {
+		cfg.LampStateFile = "./lamp_state.json"
 	}
 	return cfg, nil
 }
