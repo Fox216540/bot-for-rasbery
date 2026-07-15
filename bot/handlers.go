@@ -12,6 +12,9 @@ import (
 func keyboard() tgbotapi.ReplyKeyboardMarkup {
 	kb := tgbotapi.NewReplyKeyboard(
 		tgbotapi.NewKeyboardButtonRow(
+			tgbotapi.NewKeyboardButton("Лампа"),
+		),
+		tgbotapi.NewKeyboardButtonRow(
 			tgbotapi.NewKeyboardButton("/info"),
 			tgbotapi.NewKeyboardButton("/status"),
 		),
@@ -52,7 +55,7 @@ func indentLines(text, prefix string) string {
 	return strings.Join(lines, "\n")
 }
 
-func handleMessage(bot *tgbotapi.BotAPI, cfg Config, store *NotesStore, state *userState, msg *tgbotapi.Message) {
+func handleMessage(bot *tgbotapi.BotAPI, cfg Config, store *NotesStore, lamp *LampService, state *userState, msg *tgbotapi.Message) {
 	chatID := msg.Chat.ID
 	text := strings.TrimSpace(msg.Text)
 	userID := msg.From.ID
@@ -173,12 +176,24 @@ func handleMessage(bot *tgbotapi.BotAPI, cfg Config, store *NotesStore, state *u
 			lines = append(lines, fmt.Sprintf("%d. %s [%s] %s", i+1, n.ID, n.CreatedAt.Format(time.RFC3339), n.Text))
 		}
 		send(bot, chatID, strings.Join(lines, "\n"))
+	case "Лампа":
+		on, err := lamp.Toggle()
+		if err != nil {
+			log.Printf("lamp toggle failed: %v", err)
+			send(bot, chatID, "Не удалось переключить лампу.")
+			return
+		}
+		if on {
+			send(bot, chatID, "Лампа включилась.")
+			return
+		}
+		send(bot, chatID, "Лампа выключилась.")
 	default:
 		send(bot, chatID, "Используй кнопки ниже.")
 	}
 }
 
-func processUpdates(bot *tgbotapi.BotAPI, cfg Config, store *NotesStore, state *userState, updates tgbotapi.UpdatesChannel) {
+func processUpdates(bot *tgbotapi.BotAPI, cfg Config, store *NotesStore, lamp *LampService, state *userState, updates tgbotapi.UpdatesChannel) {
 	for update := range updates {
 		if update.Message == nil || update.Message.From == nil {
 			continue
@@ -189,7 +204,7 @@ func processUpdates(bot *tgbotapi.BotAPI, cfg Config, store *NotesStore, state *
 		if update.Message.Text == "" {
 			continue
 		}
-		handleMessage(bot, cfg, store, state, update.Message)
+		handleMessage(bot, cfg, store, lamp, state, update.Message)
 	}
 	log.Println("updates channel closed")
 }
