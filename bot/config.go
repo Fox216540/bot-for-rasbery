@@ -20,7 +20,7 @@ type Config struct {
 	LampPort      string
 	LampLocation  string
 	LampStateFile string
-	StripMAC      string
+	StripURL      string
 }
 
 func loadConfig() (Config, error) {
@@ -35,7 +35,7 @@ func loadConfig() (Config, error) {
 		LampPort:      strings.TrimSpace(os.Getenv("LAMP_PORT")),
 		LampLocation:  strings.TrimSpace(os.Getenv("LAMP_HUB_LOCATION")),
 		LampStateFile: strings.TrimSpace(os.Getenv("LAMP_STATE_FILE")),
-		StripMAC:      strings.TrimSpace(os.Getenv("STRIP_MAC")),
+		StripURL:      strings.TrimRight(strings.TrimSpace(os.Getenv("STRIP_SERVICE_URL")), "/"),
 	}
 	if cfg.BotToken == "" {
 		return Config{}, fmt.Errorf("BOT_TOKEN is required")
@@ -69,8 +69,8 @@ func loadConfig() (Config, error) {
 	if cfg.LampStateFile == "" {
 		cfg.LampStateFile = "./lamp_state.json"
 	}
-	if cfg.StripMAC == "" {
-		cfg.StripMAC = "BE:68:E6:00:53:2D"
+	if cfg.StripURL == "" {
+		cfg.StripURL = "http://127.0.0.1:8010"
 	}
 	return cfg, nil
 }
