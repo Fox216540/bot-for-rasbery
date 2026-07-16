@@ -35,9 +35,6 @@ services:
       - /dev/bus/usb:/dev/bus/usb
     device_cgroup_rules:
       - "c 189:* rmw"
-    depends_on:
-      ai:
-        condition: service_healthy
     restart: unless-stopped
     network_mode: host
 
