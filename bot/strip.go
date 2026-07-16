@@ -1,25 +1,21 @@
 package main
 
 import (
+	"bytes"
+	"context"
+	"encoding/json"
 	"fmt"
-	"log"
+	"io"
+	"net/http"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
-
-	lotuslantern "github.com/Rxflex/LotusLantern"
-)
-
-const (
-	stripDeviceName         = "ELK-BLEDDM 8C"
-	defaultStripIdleTimeout = time.Minute
 )
 
 type RGB struct {
-	R int
-	G int
-	B int
+	R int `json:"r"`
+	G int `json:"g"`
+	B int `json:"b"`
 }
 
 var (
@@ -32,253 +28,121 @@ var (
 	StripOrange = RGB{255, 128, 0}
 )
 
-type stripLamp interface {
-	LightOn(on bool) error
-	ChangeColorRGB(r, g, b int) error
-	ChangeBrightness(brightness, lightMode int) error
-	ChangeMode(mode int) error
-	ChangeModeSpeed(speed int) error
-	Close() error
+type StripStatus struct {
+	Connected bool `json:"connected"`
+	Powered   bool `json:"powered"`
 }
 
-type StripConnector interface {
-	Connect(addr, name string) (stripLamp, error)
+type StripClient struct {
+	baseURL string
+	client  *http.Client
 }
 
-type lotusStripConnector struct{}
-
-func (lotusStripConnector) Connect(addr, name string) (stripLamp, error) {
-	return lotuslantern.Connect(addr, name)
-}
-
-type StripService struct {
-	mac       string
-	name      string
-	connector StripConnector
-
-	mu      sync.Mutex
-	lamp    stripLamp
-	idle    *time.Timer
-	idleTTL time.Duration
-	timerMu sync.Mutex
-	timer   *time.Timer
-}
-
-func newStripService(mac string) *StripService {
-	return &StripService{
-		mac:       mac,
-		name:      stripDeviceName,
-		connector: lotusStripConnector{},
-		idleTTL:   defaultStripIdleTimeout,
+func newStripClient(baseURL string) *StripClient {
+	return &StripClient{
+		baseURL: strings.TrimRight(baseURL, "/"),
+		client:  &http.Client{Timeout: 10 * time.Second},
 	}
 }
 
-func (s *StripService) On() error {
-	if err := s.withLamp("power on", func(l stripLamp) error {
-		return l.LightOn(true)
-	}); err != nil {
-		return fmt.Errorf("power on: %w", err)
-	}
-	return nil
+func (c *StripClient) On() error {
+	return c.post(context.Background(), "/power/on", nil)
 }
 
-func (s *StripService) Off() error {
-	if err := s.withLamp("power off", func(l stripLamp) error {
-		return l.LightOn(false)
-	}); err != nil {
-		return fmt.Errorf("power off: %w", err)
-	}
-	return nil
+func (c *StripClient) Off() error {
+	return c.post(context.Background(), "/power/off", nil)
 }
 
-func (s *StripService) SetRGB(r, g, b int) error {
-	return s.SetColor(RGB{r, g, b})
+func (c *StripClient) SetRGB(r, g, b int) error {
+	return c.SetColor(RGB{r, g, b})
 }
 
-func (s *StripService) SetColor(rgb RGB) error {
+func (c *StripClient) SetColor(rgb RGB) error {
 	if err := validateRGB(rgb.R, rgb.G, rgb.B); err != nil {
 		return err
 	}
-	if err := s.withLamp(fmt.Sprintf("color rgb %d %d %d", rgb.R, rgb.G, rgb.B), func(l stripLamp) error {
-		return l.ChangeColorRGB(rgb.R, rgb.G, rgb.B)
-	}); err != nil {
-		return fmt.Errorf("set color: %w", err)
-	}
-	return nil
+	return c.post(context.Background(), "/color", rgb)
 }
 
-func (s *StripService) SetBrightness(percent int) error {
-	value, err := brightnessValue(percent)
-	if err != nil {
-		return err
+func (c *StripClient) SetBrightness(percent int) error {
+	if percent < 0 || percent > 100 {
+		return fmt.Errorf("invalid strip brightness: %d", percent)
 	}
-	if err := s.withLamp(fmt.Sprintf("brightness %d%%", percent), func(l stripLamp) error {
-		return l.ChangeBrightness(value, 0)
-	}); err != nil {
-		return fmt.Errorf("set brightness: %w", err)
-	}
-	return nil
+	return c.post(context.Background(), "/brightness", map[string]int{"value": percent})
 }
 
-func (s *StripService) SetSpeed(value int) error {
+func (c *StripClient) SetSpeed(value int) error {
 	if value < 0 || value > 255 {
 		return fmt.Errorf("invalid strip speed: %d", value)
 	}
-	if err := s.withLamp(fmt.Sprintf("speed %d", value), func(l stripLamp) error {
-		return l.ChangeModeSpeed(value)
-	}); err != nil {
-		return fmt.Errorf("set speed: %w", err)
-	}
-	return nil
+	return c.post(context.Background(), "/speed", map[string]int{"value": value})
 }
 
-func (s *StripService) SetMode(mode int) error {
-	if mode < 1 || mode > 127 {
+func (c *StripClient) SetMode(mode int) error {
+	if mode < 0 || mode > 212 {
 		return fmt.Errorf("invalid strip mode: %d", mode)
 	}
-	if err := s.withLamp(fmt.Sprintf("mode %d", mode), func(l stripLamp) error {
-		return l.ChangeMode(mode)
-	}); err != nil {
-		return fmt.Errorf("set mode: %w", err)
-	}
-	return nil
+	return c.post(context.Background(), "/mode", map[string]int{"mode": mode})
 }
 
-func (s *StripService) SetTimer(d time.Duration) error {
+func (c *StripClient) SetTimer(d time.Duration) error {
 	if d <= 0 {
 		return fmt.Errorf("invalid strip timer duration: %s", d)
 	}
-	s.timerMu.Lock()
-	if s.timer != nil {
-		s.timer.Stop()
+	return c.post(context.Background(), "/timer", map[string]int{"seconds": int(d.Seconds())})
+}
+
+func (c *StripClient) CancelTimer() error {
+	return c.do(context.Background(), http.MethodDelete, "/timer", nil, nil)
+}
+
+func (c *StripClient) Status() (StripStatus, error) {
+	var status StripStatus
+	if err := c.do(context.Background(), http.MethodGet, "/status", nil, &status); err != nil {
+		return StripStatus{}, err
 	}
-	s.timer = time.AfterFunc(d, func() {
-		if err := s.Off(); err != nil {
-			log.Printf("strip timer off failed: %v", err)
+	return status, nil
+}
+
+func (c *StripClient) post(ctx context.Context, path string, body any) error {
+	return c.do(ctx, http.MethodPost, path, body, nil)
+}
+
+func (c *StripClient) do(ctx context.Context, method, path string, body any, out any) error {
+	var payload io.Reader
+	if body != nil {
+		b, err := json.Marshal(body)
+		if err != nil {
+			return fmt.Errorf("marshal strip request: %w", err)
 		}
-	})
-	s.timerMu.Unlock()
-	log.Printf("strip timer set: %s", d)
-	return nil
-}
-
-func (s *StripService) CancelTimer() error {
-	s.timerMu.Lock()
-	defer s.timerMu.Unlock()
-	if s.timer != nil {
-		s.timer.Stop()
-		s.timer = nil
+		payload = bytes.NewReader(b)
 	}
-	log.Print("strip timer canceled")
-	return nil
-}
 
-func (s *StripService) Close() error {
-	if err := s.CancelTimer(); err != nil {
-		return fmt.Errorf("cancel strip timer: %w", err)
-	}
-	if err := s.Disconnect(); err != nil {
-		return fmt.Errorf("disconnect strip: %w", err)
-	}
-	return nil
-}
-
-func (s *StripService) withLamp(command string, run func(stripLamp) error) error {
-	start := time.Now()
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.stopIdleLocked()
-
-	lamp, err := s.ensureConnected(command)
+	req, err := http.NewRequestWithContext(ctx, method, c.baseURL+path, payload)
 	if err != nil {
-		return err
+		return fmt.Errorf("build strip request: %w", err)
+	}
+	if body != nil {
+		req.Header.Set("Content-Type", "application/json")
 	}
 
-	log.Printf("strip command start command=%q", command)
-	if err := run(lamp); err != nil {
-		log.Printf("strip command failed command=%q duration=%s error=%v", command, time.Since(start), err)
-		s.disconnectLocked(command)
-		lamp, connectErr := s.ensureConnected(command)
-		if connectErr != nil {
-			return fmt.Errorf("reconnect strip: %w", connectErr)
-		}
-		if retryErr := run(lamp); retryErr != nil {
-			s.disconnectLocked(command)
-			return retryErr
-		}
-	}
-
-	log.Printf("strip command done command=%q duration=%s", command, time.Since(start))
-	s.scheduleIdleLocked(command)
-	return nil
-}
-
-func (s *StripService) ensureConnected(command string) (stripLamp, error) {
-	if s.lamp != nil {
-		return s.lamp, nil
-	}
-	log.Printf("strip connect start mac=%s command=%q", s.mac, command)
-	lamp, err := s.connector.Connect(s.mac, s.name)
+	resp, err := c.client.Do(req)
 	if err != nil {
-		log.Printf("strip connect failed mac=%s command=%q error=%v", s.mac, command, err)
-		log.Printf("strip connect retry mac=%s command=%q", s.mac, command)
-		lamp, err = s.connector.Connect(s.mac, s.name)
-		if err == nil {
-			log.Printf("strip connect retry succeeded mac=%s command=%q", s.mac, command)
-		}
+		return fmt.Errorf("call strip service: %w", err)
 	}
-	if err != nil {
-		return nil, fmt.Errorf("connect strip: %w", err)
+	defer resp.Body.Close()
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		b, _ := io.ReadAll(io.LimitReader(resp.Body, 1024))
+		return fmt.Errorf("strip service %s %s: %s: %s", method, path, resp.Status, strings.TrimSpace(string(b)))
 	}
-	s.lamp = lamp
-	log.Printf("strip connected mac=%s command=%q", s.mac, command)
-	return s.lamp, nil
-}
-
-func (s *StripService) Disconnect() error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.stopIdleLocked()
-	return s.disconnectLocked("manual disconnect")
-}
-
-func (s *StripService) disconnectLocked(command string) error {
-	s.stopIdleLocked()
-	if s.lamp == nil {
+	if out == nil {
 		return nil
 	}
-	err := s.lamp.Close()
-	s.lamp = nil
-	if err != nil {
-		log.Printf("strip disconnect failed command=%q error=%v", command, err)
-	} else {
-		log.Printf("strip disconnected command=%q", command)
+	if err := json.NewDecoder(resp.Body).Decode(out); err != nil {
+		return fmt.Errorf("decode strip response: %w", err)
 	}
-	return err
-}
-
-func (s *StripService) scheduleIdleLocked(command string) {
-	if s.idleTTL <= 0 {
-		return
-	}
-	s.stopIdleLocked()
-	s.idle = time.AfterFunc(s.idleTTL, func() {
-		s.mu.Lock()
-		defer s.mu.Unlock()
-		if err := s.disconnectLocked("idle timeout"); err != nil {
-			log.Printf("strip idle disconnect failed after command=%q error=%v", command, err)
-			return
-		}
-		log.Printf("strip idle disconnect completed after command=%q timeout=%s", command, s.idleTTL)
-	})
-	log.Printf("strip idle disconnect scheduled command=%q timeout=%s", command, s.idleTTL)
-}
-
-func (s *StripService) stopIdleLocked() {
-	if s.idle != nil {
-		s.idle.Stop()
-		s.idle = nil
-	}
+	return nil
 }
 
 func parseRGB(text string) (int, int, int, error) {
@@ -332,13 +196,6 @@ func validateRGB(r, g, b int) error {
 		}
 	}
 	return nil
-}
-
-func brightnessValue(percent int) (int, error) {
-	if percent < 0 || percent > 100 {
-		return 0, fmt.Errorf("invalid strip brightness: %d", percent)
-	}
-	return percent * 255 / 100, nil
 }
 
 func stripTimerDuration(name string) (time.Duration, error) {
