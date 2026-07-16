@@ -39,10 +39,10 @@ func TestLampServiceToggleOffToOn(t *testing.T) {
 
 	var gotName string
 	var gotArgs []string
-	service.run = func(name string, args ...string) error {
+	service.run = func(name string, args ...string) (string, error) {
 		gotName = name
 		gotArgs = append([]string{}, args...)
-		return nil
+		return "", nil
 	}
 
 	on, err := service.Toggle()
@@ -69,9 +69,9 @@ func TestLampServiceToggleOnToOff(t *testing.T) {
 	service := newLampService("1-1", "4", store)
 
 	var gotArgs []string
-	service.run = func(name string, args ...string) error {
+	service.run = func(name string, args ...string) (string, error) {
 		gotArgs = append([]string{}, args...)
-		return nil
+		return "", nil
 	}
 
 	on, err := service.Toggle()
@@ -90,8 +90,8 @@ func TestLampServiceToggleOnToOff(t *testing.T) {
 func TestLampServiceDoesNotSaveOnCommandError(t *testing.T) {
 	store := newLampStore(t.TempDir() + "/lamp_state.json")
 	service := newLampService("1-1", "4", store)
-	service.run = func(name string, args ...string) error {
-		return errors.New("failed")
+	service.run = func(name string, args ...string) (string, error) {
+		return "uhubctl output", errors.New("failed")
 	}
 
 	if _, err := service.Toggle(); err == nil {

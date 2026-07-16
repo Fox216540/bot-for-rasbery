@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"sync"
 )
 
@@ -60,7 +61,7 @@ func (s *LampStore) Set(on bool) error {
 	return os.WriteFile(s.path, b, 0o644)
 }
 
-type commandRunner func(name string, args ...string) error
+type commandRunner func(name string, args ...string) (string, error)
 
 type LampService struct {
 	location string
@@ -79,8 +80,9 @@ func newLampService(location, port string, store *LampStore) *LampService {
 	}
 }
 
-func runCommand(name string, args ...string) error {
-	return exec.Command(name, args...).Run()
+func runCommand(name string, args ...string) (string, error) {
+	out, err := exec.Command(name, args...).CombinedOutput()
+	return strings.TrimSpace(string(out)), err
 }
 
 func (s *LampService) Toggle() (bool, error) {
@@ -98,8 +100,12 @@ func (s *LampService) Toggle() (bool, error) {
 		action = "on"
 	}
 
-	if err := s.run("uhubctl", "-l", s.location, "-p", s.port, "-a", action); err != nil {
-		return false, fmt.Errorf("switch lamp %s: %w", action, err)
+	out, err := s.run("uhubctl", "-l", s.location, "-p", s.port, "-a", action)
+	if err != nil {
+		if out == "" {
+			return false, fmt.Errorf("switch lamp %s: %w", action, err)
+		}
+		return false, fmt.Errorf("switch lamp %s: %w: %s", action, err, out)
 	}
 	if err := s.store.Set(next); err != nil {
 		return false, fmt.Errorf("save lamp state: %w", err)
