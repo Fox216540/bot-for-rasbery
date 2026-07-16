@@ -5,10 +5,11 @@ import "sync"
 type pendingAction string
 
 const (
-	actionNone   pendingAction = ""
-	actionAdd    pendingAction = "add"
-	actionSearch pendingAction = "search"
-	actionDelete pendingAction = "delete"
+	actionNone     pendingAction = ""
+	actionAdd      pendingAction = "add"
+	actionSearch   pendingAction = "search"
+	actionDelete   pendingAction = "delete"
+	actionStripRGB pendingAction = "strip_rgb"
 )
 
 type userState struct {
