@@ -28,17 +28,33 @@ services:
       HOST_SYS: /host_sys
       AI_URL: http://127.0.0.1:8000
       LAMP_STATE_FILE: /data/lamp_state.json
+      STRIP_SERVICE_URL: http://127.0.0.1:8010
     volumes:
       - notes_data:/data
       - /proc:/host_proc:ro
       - /sys:/host_sys:ro
       - /dev/bus/usb:/dev/bus/usb
-      - /var/run/dbus:/var/run/dbus
     device_cgroup_rules:
       - "c 189:* rmw"
     depends_on:
       ai:
         condition: service_healthy
+      strip-service:
+        condition: service_started
+    restart: unless-stopped
+    network_mode: host
+
+  strip-service:
+    build:
+      context: ./strip_service
+      dockerfile: Dockerfile
+    container_name: strip-service
+    environment:
+      STRIP_ADDRESS: ${STRIP_ADDRESS:-BE:68:E6:00:53:2D}
+      STRIP_NAME: ${STRIP_NAME:-ELK-BLEDDM 8C}
+    volumes:
+      - /var/run/dbus:/var/run/dbus
+    privileged: true
     restart: unless-stopped
     network_mode: host
 
