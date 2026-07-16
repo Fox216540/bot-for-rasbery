@@ -20,7 +20,7 @@ func main() {
 		log.Fatalf("notes init error: %v", err)
 	}
 	lamp := newLampService(cfg.LampLocation, cfg.LampPort, newLampStore(cfg.LampStateFile))
-	strip := newStripService(cfg.StripMAC)
+	strip := newStripClient(cfg.StripURL)
 
 	if err := waitForAI(cfg.AIURL, 2*time.Minute); err != nil {
 		log.Fatalf("ai service unavailable: %v", err)
