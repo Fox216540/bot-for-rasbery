@@ -20,6 +20,7 @@ func main() {
 		log.Fatalf("notes init error: %v", err)
 	}
 	lamp := newLampService(cfg.LampLocation, cfg.LampPort, newLampStore(cfg.LampStateFile))
+	strip := newStripService(cfg.StripMAC)
 
 	if err := waitForAI(cfg.AIURL, 2*time.Minute); err != nil {
 		log.Fatalf("ai service unavailable: %v", err)
@@ -38,5 +39,5 @@ func main() {
 	updates := bot.GetUpdatesChan(u)
 
 	state := newUserState()
-	processUpdates(bot, cfg, store, lamp, state, updates)
+	processUpdates(bot, cfg, store, lamp, strip, state, updates)
 }
