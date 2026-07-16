@@ -190,7 +190,7 @@ func indentLines(text, prefix string) string {
 	return strings.Join(lines, "\n")
 }
 
-func handleMessage(bot *tgbotapi.BotAPI, cfg Config, store *NotesStore, lamp *LampService, strip *StripService, state *userState, msg *tgbotapi.Message) {
+func handleMessage(bot *tgbotapi.BotAPI, cfg Config, store *NotesStore, lamp *LampService, strip *StripClient, state *userState, msg *tgbotapi.Message) {
 	chatID := msg.Chat.ID
 	text := strings.TrimSpace(msg.Text)
 	userID := msg.From.ID
@@ -412,7 +412,7 @@ func handleStripCommand(bot *tgbotapi.BotAPI, chatID int64, markup tgbotapi.Repl
 	sendWithKeyboard(bot, chatID, success, markup)
 }
 
-func processUpdates(bot *tgbotapi.BotAPI, cfg Config, store *NotesStore, lamp *LampService, strip *StripService, state *userState, updates tgbotapi.UpdatesChannel) {
+func processUpdates(bot *tgbotapi.BotAPI, cfg Config, store *NotesStore, lamp *LampService, strip *StripClient, state *userState, updates tgbotapi.UpdatesChannel) {
 	for update := range updates {
 		if update.Message == nil || update.Message.From == nil {
 			continue
