@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"log"
+	"strconv"
 	"strings"
 	"time"
 
@@ -13,6 +14,7 @@ func keyboard() tgbotapi.ReplyKeyboardMarkup {
 	kb := tgbotapi.NewReplyKeyboard(
 		tgbotapi.NewKeyboardButtonRow(
 			tgbotapi.NewKeyboardButton("Лампа"),
+			tgbotapi.NewKeyboardButton("Лента"),
 		),
 		tgbotapi.NewKeyboardButtonRow(
 			tgbotapi.NewKeyboardButton("/info"),
@@ -30,6 +32,139 @@ func keyboard() tgbotapi.ReplyKeyboardMarkup {
 	)
 	kb.ResizeKeyboard = true
 	return kb
+}
+
+func stripKeyboard() tgbotapi.ReplyKeyboardMarkup {
+	kb := tgbotapi.NewReplyKeyboard(
+		tgbotapi.NewKeyboardButtonRow(
+			tgbotapi.NewKeyboardButton("Включить"),
+			tgbotapi.NewKeyboardButton("Выключить"),
+		),
+		tgbotapi.NewKeyboardButtonRow(
+			tgbotapi.NewKeyboardButton("Цвет"),
+			tgbotapi.NewKeyboardButton("Анимации"),
+		),
+		tgbotapi.NewKeyboardButtonRow(
+			tgbotapi.NewKeyboardButton("Яркость"),
+			tgbotapi.NewKeyboardButton("Скорость"),
+			tgbotapi.NewKeyboardButton("Таймер"),
+		),
+		tgbotapi.NewKeyboardButtonRow(
+			tgbotapi.NewKeyboardButton("Назад"),
+		),
+	)
+	kb.ResizeKeyboard = true
+	return kb
+}
+
+func stripColorKeyboard() tgbotapi.ReplyKeyboardMarkup {
+	kb := tgbotapi.NewReplyKeyboard(
+		tgbotapi.NewKeyboardButtonRow(
+			tgbotapi.NewKeyboardButton("Красный"),
+			tgbotapi.NewKeyboardButton("Зеленый"),
+			tgbotapi.NewKeyboardButton("Синий"),
+		),
+		tgbotapi.NewKeyboardButtonRow(
+			tgbotapi.NewKeyboardButton("Желтый"),
+			tgbotapi.NewKeyboardButton("Фиолетовый"),
+			tgbotapi.NewKeyboardButton("Белый"),
+		),
+		tgbotapi.NewKeyboardButtonRow(
+			tgbotapi.NewKeyboardButton("Оранжевый"),
+			tgbotapi.NewKeyboardButton("RGB"),
+		),
+		tgbotapi.NewKeyboardButtonRow(
+			tgbotapi.NewKeyboardButton("Назад"),
+		),
+	)
+	kb.ResizeKeyboard = true
+	return kb
+}
+
+func stripBrightnessKeyboard() tgbotapi.ReplyKeyboardMarkup {
+	kb := tgbotapi.NewReplyKeyboard(
+		tgbotapi.NewKeyboardButtonRow(
+			tgbotapi.NewKeyboardButton("10%"),
+			tgbotapi.NewKeyboardButton("20%"),
+			tgbotapi.NewKeyboardButton("30%"),
+			tgbotapi.NewKeyboardButton("40%"),
+			tgbotapi.NewKeyboardButton("50%"),
+		),
+		tgbotapi.NewKeyboardButtonRow(
+			tgbotapi.NewKeyboardButton("60%"),
+			tgbotapi.NewKeyboardButton("70%"),
+			tgbotapi.NewKeyboardButton("80%"),
+			tgbotapi.NewKeyboardButton("90%"),
+			tgbotapi.NewKeyboardButton("100%"),
+		),
+		tgbotapi.NewKeyboardButtonRow(
+			tgbotapi.NewKeyboardButton("Назад"),
+		),
+	)
+	kb.ResizeKeyboard = true
+	return kb
+}
+
+func stripSpeedKeyboard() tgbotapi.ReplyKeyboardMarkup {
+	kb := tgbotapi.NewReplyKeyboard(
+		tgbotapi.NewKeyboardButtonRow(
+			tgbotapi.NewKeyboardButton("Очень медленно"),
+			tgbotapi.NewKeyboardButton("Медленно"),
+		),
+		tgbotapi.NewKeyboardButtonRow(
+			tgbotapi.NewKeyboardButton("Средне"),
+			tgbotapi.NewKeyboardButton("Быстро"),
+			tgbotapi.NewKeyboardButton("Очень быстро"),
+		),
+		tgbotapi.NewKeyboardButtonRow(
+			tgbotapi.NewKeyboardButton("Назад"),
+		),
+	)
+	kb.ResizeKeyboard = true
+	return kb
+}
+
+func stripTimerKeyboard() tgbotapi.ReplyKeyboardMarkup {
+	kb := tgbotapi.NewReplyKeyboard(
+		tgbotapi.NewKeyboardButtonRow(
+			tgbotapi.NewKeyboardButton("Через 10 минут"),
+			tgbotapi.NewKeyboardButton("Через 30 минут"),
+		),
+		tgbotapi.NewKeyboardButtonRow(
+			tgbotapi.NewKeyboardButton("Через 1 час"),
+			tgbotapi.NewKeyboardButton("Через 2 часа"),
+		),
+		tgbotapi.NewKeyboardButtonRow(
+			tgbotapi.NewKeyboardButton("Выключить таймер"),
+			tgbotapi.NewKeyboardButton("Назад"),
+		),
+	)
+	kb.ResizeKeyboard = true
+	return kb
+}
+
+func stripModeKeyboard() tgbotapi.ReplyKeyboardMarkup {
+	kb := tgbotapi.NewReplyKeyboard(
+		tgbotapi.NewKeyboardButtonRow(
+			tgbotapi.NewKeyboardButton("Режим 1"),
+			tgbotapi.NewKeyboardButton("Режим 2"),
+		),
+		tgbotapi.NewKeyboardButtonRow(
+			tgbotapi.NewKeyboardButton("Режим 3"),
+			tgbotapi.NewKeyboardButton("Режим 4"),
+		),
+		tgbotapi.NewKeyboardButtonRow(
+			tgbotapi.NewKeyboardButton("Назад"),
+		),
+	)
+	kb.ResizeKeyboard = true
+	return kb
+}
+
+func sendWithKeyboard(bot *tgbotapi.BotAPI, chatID int64, text string, markup tgbotapi.ReplyKeyboardMarkup) {
+	msg := tgbotapi.NewMessage(chatID, text)
+	msg.ReplyMarkup = markup
+	_, _ = bot.Send(msg)
 }
 
 func send(bot *tgbotapi.BotAPI, chatID int64, text string) {
@@ -55,7 +190,7 @@ func indentLines(text, prefix string) string {
 	return strings.Join(lines, "\n")
 }
 
-func handleMessage(bot *tgbotapi.BotAPI, cfg Config, store *NotesStore, lamp *LampService, state *userState, msg *tgbotapi.Message) {
+func handleMessage(bot *tgbotapi.BotAPI, cfg Config, store *NotesStore, lamp *LampService, strip *StripService, state *userState, msg *tgbotapi.Message) {
 	chatID := msg.Chat.ID
 	text := strings.TrimSpace(msg.Text)
 	userID := msg.From.ID
@@ -118,6 +253,20 @@ func handleMessage(bot *tgbotapi.BotAPI, cfg Config, store *NotesStore, lamp *La
 				return
 			}
 			send(bot, chatID, "Заметка удалена.")
+			return
+		case actionStripRGB:
+			r, g, b, err := parseRGB(text)
+			state.set(userID, actionNone)
+			if err != nil {
+				sendWithKeyboard(bot, chatID, "Некорректный RGB. Используй формат: 255 128 0 или #FF8000.", stripColorKeyboard())
+				return
+			}
+			if err := strip.SetRGB(r, g, b); err != nil {
+				log.Printf("strip rgb failed: %v", err)
+				sendWithKeyboard(bot, chatID, "Не удалось подключиться к LED-ленте.\n\nПопробуйте еще раз.", stripColorKeyboard())
+				return
+			}
+			sendWithKeyboard(bot, chatID, "Цвет изменен.", stripKeyboard())
 			return
 		}
 	}
@@ -188,12 +337,82 @@ func handleMessage(bot *tgbotapi.BotAPI, cfg Config, store *NotesStore, lamp *La
 			return
 		}
 		send(bot, chatID, "Лампа выключилась.")
+	case "Лента":
+		sendWithKeyboard(bot, chatID, "Лента", stripKeyboard())
+	case "Назад":
+		send(bot, chatID, "Главное меню.")
+	case "Включить":
+		handleStripCommand(bot, chatID, stripKeyboard(), "Лента включена.", func() error { return strip.On() })
+	case "Выключить":
+		handleStripCommand(bot, chatID, stripKeyboard(), "Лента выключена.", func() error { return strip.Off() })
+	case "Цвет":
+		sendWithKeyboard(bot, chatID, "Цвет", stripColorKeyboard())
+	case "Красный":
+		handleStripCommand(bot, chatID, stripColorKeyboard(), "Цвет изменен.", func() error { return strip.SetColor(StripRed) })
+	case "Зеленый":
+		handleStripCommand(bot, chatID, stripColorKeyboard(), "Цвет изменен.", func() error { return strip.SetColor(StripGreen) })
+	case "Синий":
+		handleStripCommand(bot, chatID, stripColorKeyboard(), "Цвет изменен.", func() error { return strip.SetColor(StripBlue) })
+	case "Желтый":
+		handleStripCommand(bot, chatID, stripColorKeyboard(), "Цвет изменен.", func() error { return strip.SetColor(StripYellow) })
+	case "Фиолетовый":
+		handleStripCommand(bot, chatID, stripColorKeyboard(), "Цвет изменен.", func() error { return strip.SetColor(StripPurple) })
+	case "Белый":
+		handleStripCommand(bot, chatID, stripColorKeyboard(), "Цвет изменен.", func() error { return strip.SetColor(StripWhite) })
+	case "Оранжевый":
+		handleStripCommand(bot, chatID, stripColorKeyboard(), "Цвет изменен.", func() error { return strip.SetColor(StripOrange) })
+	case "RGB":
+		state.set(userID, actionStripRGB)
+		sendWithoutKeyboard(bot, chatID, "Отправь RGB: 255 128 0 или #FF8000.")
+	case "Яркость":
+		sendWithKeyboard(bot, chatID, "Яркость", stripBrightnessKeyboard())
+	case "10%", "20%", "30%", "40%", "50%", "60%", "70%", "80%", "90%", "100%":
+		percent, _ := strconv.Atoi(strings.TrimSuffix(text, "%"))
+		handleStripCommand(bot, chatID, stripBrightnessKeyboard(), "Яркость изменена.", func() error { return strip.SetBrightness(percent) })
+	case "Скорость":
+		sendWithKeyboard(bot, chatID, "Скорость", stripSpeedKeyboard())
+	case "Очень медленно":
+		handleStripCommand(bot, chatID, stripSpeedKeyboard(), "Скорость изменена.", func() error { return strip.SetSpeed(10) })
+	case "Медленно":
+		handleStripCommand(bot, chatID, stripSpeedKeyboard(), "Скорость изменена.", func() error { return strip.SetSpeed(25) })
+	case "Средне":
+		handleStripCommand(bot, chatID, stripSpeedKeyboard(), "Скорость изменена.", func() error { return strip.SetSpeed(50) })
+	case "Быстро":
+		handleStripCommand(bot, chatID, stripSpeedKeyboard(), "Скорость изменена.", func() error { return strip.SetSpeed(75) })
+	case "Очень быстро":
+		handleStripCommand(bot, chatID, stripSpeedKeyboard(), "Скорость изменена.", func() error { return strip.SetSpeed(100) })
+	case "Анимации":
+		sendWithKeyboard(bot, chatID, "Анимации", stripModeKeyboard())
+	case "Режим 1":
+		handleStripCommand(bot, chatID, stripModeKeyboard(), "Анимация изменена.", func() error { return strip.SetMode(1) })
+	case "Режим 2":
+		handleStripCommand(bot, chatID, stripModeKeyboard(), "Анимация изменена.", func() error { return strip.SetMode(2) })
+	case "Режим 3":
+		handleStripCommand(bot, chatID, stripModeKeyboard(), "Анимация изменена.", func() error { return strip.SetMode(3) })
+	case "Режим 4":
+		handleStripCommand(bot, chatID, stripModeKeyboard(), "Анимация изменена.", func() error { return strip.SetMode(4) })
+	case "Таймер":
+		sendWithKeyboard(bot, chatID, "Таймер", stripTimerKeyboard())
+	case "Через 10 минут", "Через 30 минут", "Через 1 час", "Через 2 часа":
+		duration, _ := stripTimerDuration(text)
+		handleStripCommand(bot, chatID, stripTimerKeyboard(), "Таймер установлен.", func() error { return strip.SetTimer(duration) })
+	case "Выключить таймер":
+		handleStripCommand(bot, chatID, stripTimerKeyboard(), "Таймер выключен.", func() error { return strip.CancelTimer() })
 	default:
 		send(bot, chatID, "Используй кнопки ниже.")
 	}
 }
 
-func processUpdates(bot *tgbotapi.BotAPI, cfg Config, store *NotesStore, lamp *LampService, state *userState, updates tgbotapi.UpdatesChannel) {
+func handleStripCommand(bot *tgbotapi.BotAPI, chatID int64, markup tgbotapi.ReplyKeyboardMarkup, success string, fn func() error) {
+	if err := fn(); err != nil {
+		log.Printf("strip command failed: %v", err)
+		sendWithKeyboard(bot, chatID, "Не удалось подключиться к LED-ленте.\n\nПопробуйте еще раз.", markup)
+		return
+	}
+	sendWithKeyboard(bot, chatID, success, markup)
+}
+
+func processUpdates(bot *tgbotapi.BotAPI, cfg Config, store *NotesStore, lamp *LampService, strip *StripService, state *userState, updates tgbotapi.UpdatesChannel) {
 	for update := range updates {
 		if update.Message == nil || update.Message.From == nil {
 			continue
@@ -204,7 +423,7 @@ func processUpdates(bot *tgbotapi.BotAPI, cfg Config, store *NotesStore, lamp *L
 		if update.Message.Text == "" {
 			continue
 		}
-		handleMessage(bot, cfg, store, lamp, state, update.Message)
+		handleMessage(bot, cfg, store, lamp, strip, state, update.Message)
 	}
 	log.Println("updates channel closed")
 }
