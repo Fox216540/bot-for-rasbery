@@ -21,6 +21,10 @@ func main() {
 	}
 	lamp := newLampService(cfg.LampLocation, cfg.LampPort, newLampStore(cfg.LampStateFile))
 	strip := newStripClient(cfg.StripURL)
+	esp32 := newESP32Client(cfg.ESP32URL)
+	room := newRoomSensor(cfg.RoomI2CDevice)
+	meteo := newOpenMeteoClient(cfg.MeteoURL, cfg.MeteoLatitude, cfg.MeteoLongitude)
+	statusLight := newStatusLightService(esp32, meteo, cfg.StatusDayBrightness, cfg.StatusNightBrightness)
 
 	if err := waitForAI(cfg.AIURL, 2*time.Minute); err != nil {
 		log.Fatalf("ai service unavailable: %v", err)
@@ -39,5 +43,5 @@ func main() {
 	updates := bot.GetUpdatesChan(u)
 
 	state := newUserState()
-	processUpdates(bot, cfg, store, lamp, strip, state, updates)
+	processUpdates(bot, cfg, store, lamp, strip, esp32, room, statusLight, state, updates)
 }
