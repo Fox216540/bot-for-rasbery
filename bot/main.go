@@ -43,5 +43,5 @@ func main() {
 	updates := bot.GetUpdatesChan(u)
 
 	state := newUserState()
-	processUpdates(bot, cfg, store, lamp, strip, esp32, room, statusLight, state, updates)
+	processUpdates(bot, cfg, store, lamp, strip, room, statusLight, state, updates)
 }
