@@ -10,7 +10,6 @@ const (
 	actionSearch   pendingAction = "search"
 	actionDelete   pendingAction = "delete"
 	actionStripRGB pendingAction = "strip_rgb"
-	actionESP32RGB pendingAction = "esp32_rgb"
 )
 
 type userState struct {
