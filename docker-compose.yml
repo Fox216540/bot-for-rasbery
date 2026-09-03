@@ -11,8 +11,8 @@ services:
       timeout: 3s
       retries: 30
       start_period: 20s
-    expose:
-      - "8000"
+    ports:
+      - "127.0.0.1:8000:8000"
     networks:
       - internal
 
@@ -26,24 +26,32 @@ services:
     environment:
       HOST_PROC: /host_proc
       HOST_SYS: /host_sys
-      AI_URL: http://ai:8000
+      AI_URL: http://127.0.0.1:8000
       LAMP_STATE_FILE: /data/lamp_state.json
-      STRIP_SERVICE_URL: http://strip-service:8010
+      STRIP_SERVICE_URL: http://127.0.0.1:8010
+      ESP32_URL: ${ESP32_URL:-http://192.168.1.211}
+      ROOM_I2C_DEVICE: ${ROOM_I2C_DEVICE:-/dev/i2c-1}
+      METEO_LATITUDE: ${METEO_LATITUDE:-39.4699}
+      METEO_LONGITUDE: ${METEO_LONGITUDE:--0.3763}
+      STATUS_DAY_BRIGHTNESS: ${STATUS_DAY_BRIGHTNESS:-128}
+      STATUS_NIGHT_BRIGHTNESS: ${STATUS_NIGHT_BRIGHTNESS:-1}
     volumes:
       - notes_data:/data
       - /proc:/host_proc:ro
       - /sys:/host_sys:ro
       - /dev/bus/usb:/dev/bus/usb
+    devices:
+      - /dev/i2c-1:/dev/i2c-1
     device_cgroup_rules:
       - "c 189:* rmw"
+      - "c 89:* rmw"
     depends_on:
       ai:
         condition: service_healthy
       strip-service:
         condition: service_started
     restart: unless-stopped
-    networks:
-      - internal
+    network_mode: host
 
   strip-service:
     build:
@@ -57,8 +65,8 @@ services:
       - /var/run/dbus:/var/run/dbus
     privileged: true
     restart: unless-stopped
-    expose:
-      - "8010"
+    ports:
+      - "127.0.0.1:8010:8010"
     networks:
       - internal
 
