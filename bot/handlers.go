@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"strconv"
@@ -13,8 +14,13 @@ import (
 func keyboard() tgbotapi.ReplyKeyboardMarkup {
 	kb := tgbotapi.NewReplyKeyboard(
 		tgbotapi.NewKeyboardButtonRow(
+			tgbotapi.NewKeyboardButton("Комната"),
+			tgbotapi.NewKeyboardButton("Статус"),
+		),
+		tgbotapi.NewKeyboardButtonRow(
 			tgbotapi.NewKeyboardButton("Лампа"),
 			tgbotapi.NewKeyboardButton("Лента"),
+			tgbotapi.NewKeyboardButton("ESP32 RGB"),
 		),
 		tgbotapi.NewKeyboardButtonRow(
 			tgbotapi.NewKeyboardButton("/info"),
@@ -28,6 +34,64 @@ func keyboard() tgbotapi.ReplyKeyboardMarkup {
 			tgbotapi.NewKeyboardButton("Показать заметки"),
 			tgbotapi.NewKeyboardButton("Удалить заметку"),
 			tgbotapi.NewKeyboardButton("/reboot"),
+		),
+	)
+	kb.ResizeKeyboard = true
+	return kb
+}
+
+func roomKeyboard() tgbotapi.ReplyKeyboardMarkup {
+	kb := tgbotapi.NewReplyKeyboard(
+		tgbotapi.NewKeyboardButtonRow(
+			tgbotapi.NewKeyboardButton("Температура"),
+			tgbotapi.NewKeyboardButton("Влажность"),
+			tgbotapi.NewKeyboardButton("Давление"),
+		),
+		tgbotapi.NewKeyboardButtonRow(
+			tgbotapi.NewKeyboardButton("Назад"),
+		),
+	)
+	kb.ResizeKeyboard = true
+	return kb
+}
+
+func statusKeyboard() tgbotapi.ReplyKeyboardMarkup {
+	kb := tgbotapi.NewReplyKeyboard(
+		tgbotapi.NewKeyboardButtonRow(
+			tgbotapi.NewKeyboardButton("Занят"),
+			tgbotapi.NewKeyboardButton("Свободен"),
+		),
+		tgbotapi.NewKeyboardButtonRow(
+			tgbotapi.NewKeyboardButton("Разговариваю"),
+			tgbotapi.NewKeyboardButton("Полузанят"),
+		),
+		tgbotapi.NewKeyboardButtonRow(
+			tgbotapi.NewKeyboardButton("Назад"),
+		),
+	)
+	kb.ResizeKeyboard = true
+	return kb
+}
+
+func esp32Keyboard() tgbotapi.ReplyKeyboardMarkup {
+	kb := tgbotapi.NewReplyKeyboard(
+		tgbotapi.NewKeyboardButtonRow(
+			tgbotapi.NewKeyboardButton("ESP32 online"),
+			tgbotapi.NewKeyboardButton("ESP32 выкл"),
+		),
+		tgbotapi.NewKeyboardButtonRow(
+			tgbotapi.NewKeyboardButton("ESP32 красный"),
+			tgbotapi.NewKeyboardButton("ESP32 зеленый"),
+			tgbotapi.NewKeyboardButton("ESP32 синий"),
+		),
+		tgbotapi.NewKeyboardButtonRow(
+			tgbotapi.NewKeyboardButton("ESP32 красный 20%"),
+			tgbotapi.NewKeyboardButton("ESP32 красный 50%"),
+			tgbotapi.NewKeyboardButton("ESP32 красный 100%"),
+		),
+		tgbotapi.NewKeyboardButtonRow(
+			tgbotapi.NewKeyboardButton("ESP32 RGB вручную"),
+			tgbotapi.NewKeyboardButton("Назад"),
 		),
 	)
 	kb.ResizeKeyboard = true
@@ -190,7 +254,7 @@ func indentLines(text, prefix string) string {
 	return strings.Join(lines, "\n")
 }
 
-func handleMessage(bot *tgbotapi.BotAPI, cfg Config, store *NotesStore, lamp *LampService, strip *StripClient, state *userState, msg *tgbotapi.Message) {
+func handleMessage(bot *tgbotapi.BotAPI, cfg Config, store *NotesStore, lamp *LampService, strip *StripClient, esp32 *ESP32Client, room *RoomSensor, statusLight *StatusLightService, state *userState, msg *tgbotapi.Message) {
 	chatID := msg.Chat.ID
 	text := strings.TrimSpace(msg.Text)
 	userID := msg.From.ID
@@ -268,6 +332,20 @@ func handleMessage(bot *tgbotapi.BotAPI, cfg Config, store *NotesStore, lamp *La
 			}
 			sendWithKeyboard(bot, chatID, "Цвет изменен.", stripKeyboard())
 			return
+		case actionESP32RGB:
+			r, g, b, err := parseRGB(text)
+			state.set(userID, actionNone)
+			if err != nil {
+				sendWithKeyboard(bot, chatID, "Некорректный RGB. Используй формат: 255 128 0 или #FF8000.", esp32Keyboard())
+				return
+			}
+			if err := esp32.SetRGB(r, g, b); err != nil {
+				log.Printf("esp32 rgb failed: %v", err)
+				sendWithKeyboard(bot, chatID, "Не удалось подключиться к ESP32.\n\nПопробуйте еще раз.", esp32Keyboard())
+				return
+			}
+			sendWithKeyboard(bot, chatID, "ESP32: цвет изменен.", esp32Keyboard())
+			return
 		}
 	}
 
@@ -325,6 +403,30 @@ func handleMessage(bot *tgbotapi.BotAPI, cfg Config, store *NotesStore, lamp *La
 			lines = append(lines, fmt.Sprintf("%d. %s [%s] %s", i+1, n.ID, n.CreatedAt.Format(time.RFC3339), n.Text))
 		}
 		send(bot, chatID, strings.Join(lines, "\n"))
+	case "Комната":
+		sendWithKeyboard(bot, chatID, "Комната", roomKeyboard())
+	case "Температура":
+		handleRoomReading(bot, chatID, room, "Температура", func(r RoomReading) string {
+			return fmt.Sprintf("Температура: %.2f °C", r.TemperatureC)
+		})
+	case "Влажность":
+		handleRoomReading(bot, chatID, room, "Влажность", func(r RoomReading) string {
+			return fmt.Sprintf("Влажность: %.2f%%", r.HumidityPercent)
+		})
+	case "Давление":
+		handleRoomReading(bot, chatID, room, "Давление", func(r RoomReading) string {
+			return fmt.Sprintf("Давление: %.2f мм рт. ст. (%.2f hPa)", r.PressureMMHg, r.PressureHPa)
+		})
+	case "Статус":
+		sendWithKeyboard(bot, chatID, "Статус", statusKeyboard())
+	case "Занят":
+		handleStatusCommand(bot, chatID, statusLight, "занят", RGB{255, 0, 0})
+	case "Свободен":
+		handleStatusCommand(bot, chatID, statusLight, "свободен", RGB{0, 255, 0})
+	case "Разговариваю":
+		handleStatusCommand(bot, chatID, statusLight, "разговариваю", RGB{128, 0, 255})
+	case "Полузанят":
+		handleStatusCommand(bot, chatID, statusLight, "полузанят", RGB{255, 128, 0})
 	case "Лампа":
 		on, err := lamp.Toggle()
 		if err != nil {
@@ -339,6 +441,8 @@ func handleMessage(bot *tgbotapi.BotAPI, cfg Config, store *NotesStore, lamp *La
 		send(bot, chatID, "Лампа выключилась.")
 	case "Лента":
 		sendWithKeyboard(bot, chatID, "Лента", stripKeyboard())
+	case "ESP32 RGB":
+		sendWithKeyboard(bot, chatID, "ESP32 RGB", esp32Keyboard())
 	case "Назад":
 		send(bot, chatID, "Главное меню.")
 	case "Включить":
@@ -398,6 +502,25 @@ func handleMessage(bot *tgbotapi.BotAPI, cfg Config, store *NotesStore, lamp *La
 		handleStripCommand(bot, chatID, stripTimerKeyboard(), "Таймер установлен.", func() error { return strip.SetTimer(duration) })
 	case "Выключить таймер":
 		handleStripCommand(bot, chatID, stripTimerKeyboard(), "Таймер выключен.", func() error { return strip.CancelTimer() })
+	case "ESP32 online":
+		handleESP32Command(bot, chatID, esp32Keyboard(), "ESP32 online.", func() error { return esp32.Ping() })
+	case "ESP32 выкл":
+		handleESP32Command(bot, chatID, esp32Keyboard(), "ESP32 выключен.", func() error { return esp32.Off() })
+	case "ESP32 красный":
+		handleESP32Command(bot, chatID, esp32Keyboard(), "ESP32: красный.", func() error { return esp32.Red() })
+	case "ESP32 зеленый":
+		handleESP32Command(bot, chatID, esp32Keyboard(), "ESP32: зеленый.", func() error { return esp32.Green() })
+	case "ESP32 синий":
+		handleESP32Command(bot, chatID, esp32Keyboard(), "ESP32: синий.", func() error { return esp32.Blue() })
+	case "ESP32 красный 20%":
+		handleESP32Command(bot, chatID, esp32Keyboard(), "ESP32: красный 20%.", func() error { return esp32.RedBrightness(50) })
+	case "ESP32 красный 50%":
+		handleESP32Command(bot, chatID, esp32Keyboard(), "ESP32: красный 50%.", func() error { return esp32.RedBrightness(128) })
+	case "ESP32 красный 100%":
+		handleESP32Command(bot, chatID, esp32Keyboard(), "ESP32: красный 100%.", func() error { return esp32.RedBrightness(255) })
+	case "ESP32 RGB вручную":
+		state.set(userID, actionESP32RGB)
+		sendWithoutKeyboard(bot, chatID, "Отправь RGB для ESP32: 255 128 0 или #FF8000.")
 	default:
 		send(bot, chatID, "Используй кнопки ниже.")
 	}
@@ -412,7 +535,36 @@ func handleStripCommand(bot *tgbotapi.BotAPI, chatID int64, markup tgbotapi.Repl
 	sendWithKeyboard(bot, chatID, success, markup)
 }
 
-func processUpdates(bot *tgbotapi.BotAPI, cfg Config, store *NotesStore, lamp *LampService, strip *StripClient, state *userState, updates tgbotapi.UpdatesChannel) {
+func handleRoomReading(bot *tgbotapi.BotAPI, chatID int64, room *RoomSensor, name string, format func(RoomReading) string) {
+	reading, err := room.Read()
+	if err != nil {
+		log.Printf("room %s failed: %v", name, err)
+		sendWithKeyboard(bot, chatID, "Не удалось прочитать датчики комнаты.", roomKeyboard())
+		return
+	}
+	sendWithKeyboard(bot, chatID, format(reading), roomKeyboard())
+}
+
+func handleStatusCommand(bot *tgbotapi.BotAPI, chatID int64, statusLight *StatusLightService, name string, rgb RGB) {
+	brightness, err := statusLight.Set(context.Background(), rgb)
+	if err != nil {
+		log.Printf("status light failed: %v", err)
+		sendWithKeyboard(bot, chatID, "Не удалось установить статус.", statusKeyboard())
+		return
+	}
+	sendWithKeyboard(bot, chatID, fmt.Sprintf("Статус: %s. Яркость: %d/255.", name, brightness), statusKeyboard())
+}
+
+func handleESP32Command(bot *tgbotapi.BotAPI, chatID int64, markup tgbotapi.ReplyKeyboardMarkup, success string, fn func() error) {
+	if err := fn(); err != nil {
+		log.Printf("esp32 command failed: %v", err)
+		sendWithKeyboard(bot, chatID, "Не удалось подключиться к ESP32.\n\nПопробуйте еще раз.", markup)
+		return
+	}
+	sendWithKeyboard(bot, chatID, success, markup)
+}
+
+func processUpdates(bot *tgbotapi.BotAPI, cfg Config, store *NotesStore, lamp *LampService, strip *StripClient, esp32 *ESP32Client, room *RoomSensor, statusLight *StatusLightService, state *userState, updates tgbotapi.UpdatesChannel) {
 	for update := range updates {
 		if update.Message == nil || update.Message.From == nil {
 			continue
@@ -423,7 +575,7 @@ func processUpdates(bot *tgbotapi.BotAPI, cfg Config, store *NotesStore, lamp *L
 		if update.Message.Text == "" {
 			continue
 		}
-		handleMessage(bot, cfg, store, lamp, strip, state, update.Message)
+		handleMessage(bot, cfg, store, lamp, strip, esp32, room, statusLight, state, update.Message)
 	}
 	log.Println("updates channel closed")
 }
